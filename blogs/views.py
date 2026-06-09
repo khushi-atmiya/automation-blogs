@@ -1,0 +1,45 @@
+from django.shortcuts import render
+from rest_framework import generics
+from .models import MainCategory, Category, BlogPost
+from .serializers import MainCategorySerializer, CategorySerializer, BlogPostSerializer
+
+class MainCategoryListCreateView(generics.ListCreateAPIView):
+    queryset = MainCategory.objects.all()
+    serializer_class = MainCategorySerializer
+
+class CategoryListCreateView(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+class BlogPostListCreateView(generics.ListCreateAPIView):
+    queryset = BlogPost.objects.all()
+    serializer_class = BlogPostSerializer
+
+class BlogPostDetailView(generics.RetrieveAPIView):
+    queryset = BlogPost.objects.all()
+    serializer_class = BlogPostSerializer
+
+class BlogPostByMainCategoryNameView(generics.ListAPIView):
+    serializer_class = BlogPostSerializer
+
+    def get_queryset(self):
+        main_category_name = self.kwargs['main_category_name']
+        return BlogPost.objects.filter(main_category__name__iexact=main_category_name)
+
+class BlogPostByCategoryNameView(generics.ListAPIView):
+    serializer_class = BlogPostSerializer
+
+    def get_queryset(self):
+        category_name = self.kwargs['category_name']
+        return BlogPost.objects.filter(category__name__iexact=category_name)
+
+class BlogPostByCombinedFilterView(generics.ListAPIView):
+    serializer_class = BlogPostSerializer
+
+    def get_queryset(self):
+        main_category_name = self.kwargs['main_category_name']
+        category_name = self.kwargs['category_name']
+        return BlogPost.objects.filter(
+            main_category__name__iexact=main_category_name,
+            category__name__iexact=category_name
+        )
