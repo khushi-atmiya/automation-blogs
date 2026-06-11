@@ -1,5 +1,7 @@
 from django.shortcuts import render
 from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import MainCategory, Category, BlogPost
 from .serializers import MainCategorySerializer, CategorySerializer, BlogPostSerializer
 
@@ -43,3 +45,9 @@ class BlogPostByCombinedFilterView(generics.ListAPIView):
             main_category__name__iexact=main_category_name,
             category__name__iexact=category_name
         )
+
+# Admin JS mate - selected main category na j categories return karo
+class CategoriesByMainCategoryView(APIView):
+    def get(self, request, main_category_id):
+        categories = Category.objects.filter(main_categories__id=main_category_id).values('id', 'name')
+        return Response(list(categories))

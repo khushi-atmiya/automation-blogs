@@ -23,7 +23,9 @@ class BlogPost(models.Model):
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)
     image = models.ImageField(upload_to='blog_images/', blank=True, null=True)
-    description = models.JSONField(default=list)
+    description = models.TextField(default='')
+    author = models.CharField(max_length=255, blank=True, null=True, default='')
+    blog_date = models.DateField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,0 +1,9 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+    // Server side thi badha categories na data inject karo
+    var CATEGORIES_BY_MAIN = {{ categories_by_main_json | safe }};
+</script>
+{% endblock %}
