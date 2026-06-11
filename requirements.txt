@@ -10,6 +10,7 @@ django-cors-headers==4.9.0
 djangorestframework==3.17.1
 feedparser==6.0.12
 gunicorn==26.0.0
+whitenoise==6.9.0
 h11==0.16.0
 idna==3.13
 lxml==6.1.0
