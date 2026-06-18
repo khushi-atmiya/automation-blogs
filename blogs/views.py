@@ -51,3 +51,13 @@ class CategoriesByMainCategoryView(APIView):
     def get(self, request, main_category_id):
         categories = Category.objects.filter(main_categories__id=main_category_id).values('id', 'name')
         return Response(list(categories))
+
+class CategoryByMainCategoryQueryView(generics.ListAPIView):
+    serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        queryset = Category.objects.all()
+        main_category_name = self.request.query_params.get('main_category', None)
+        if main_category_name:
+            queryset = queryset.filter(main_categories__name__iexact=main_category_name)
+        return queryset

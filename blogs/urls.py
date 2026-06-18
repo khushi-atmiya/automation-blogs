@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     MainCategoryListCreateView, CategoryListCreateView, BlogPostListCreateView, 
     BlogPostDetailView, BlogPostByMainCategoryNameView, BlogPostByCategoryNameView,
-    BlogPostByCombinedFilterView, CategoriesByMainCategoryView
+    BlogPostByCombinedFilterView, CategoriesByMainCategoryView, CategoryByMainCategoryQueryView
 )
 
 urlpatterns = [
@@ -15,4 +15,6 @@ urlpatterns = [
     path('blog-posts/filter/<str:main_category_name>/<str:category_name>/', BlogPostByCombinedFilterView.as_view(), name='blog-post-by-combined-filter'),
     # Admin JS mate - categories by main category ID
     path('categories-by-main/<int:main_category_id>/', CategoriesByMainCategoryView.as_view(), name='categories-by-main'),
+    # New API to filter categories by main category query param
+    path('categories/filter/', CategoryByMainCategoryQueryView.as_view(), name='categories-filter-by-query'),
 ]
