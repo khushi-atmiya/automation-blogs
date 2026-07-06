@@ -1,0 +1,131 @@
+{% extends "blogs/base.html" %}
+
+{% block title %}{{ blog.title }} | {{ domain }}{% endblock %}
+
+{% block seo_meta %}
+<!-- Standard Search Optimization Metadata -->
+<meta name="description" content="{{ seo_description }}" />
+<link rel="canonical" href="https://{{ domain }}/blog/{{ blog.slug }}/" />
+<meta name="robots" content="index, follow" />
+
+<!-- Open Graph / Rich Social Sharing Card -->
+<meta property="og:type" content="article" />
+<meta property="og:title" content="{{ blog.title }}" />
+<meta property="og:description" content="{{ seo_description }}" />
+<meta property="og:url" content="https://{{ domain }}/blog/{{ blog.slug }}/" />
+<meta property="og:image" content="{{ blog_image_url }}" />
+<meta property="article:published_time" content="{{ blog.created_at|date:'Y-m-d' }}" />
+
+<!-- Twitter Meta Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{{ blog.title }}" />
+<meta name="twitter:description" content="{{ seo_description }}" />
+<meta name="twitter:image" content="{{ blog_image_url }}" />
+
+<!-- JSON-LD Structured Data Schema -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "{{ blog.title }}",
+  "image": ["{{ blog_image_url }}"],
+  "datePublished": "{{ blog.created_at|date:'c' }}",
+  "dateModified": "{{ blog.updated_at|date:'c' }}",
+  "author": {
+    "@type": "Person",
+    "name": "{{ blog.author|default:'Admin' }}"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "{{ domain }}",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://{{ domain }}/favicon.ico"
+    }
+  },
+  "description": "{{ seo_description }}"
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        
+        <!-- Post Main Content Area -->
+        <article class="lg:col-span-2 bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-sm">
+            <span class="text-blue-600 font-bold uppercase tracking-widest text-xs sm:text-sm block mb-3">
+                {{ blog.category.name }}
+            </span>
+            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 leading-tight mb-6">
+                {{ blog.title }}
+            </h1>
+            
+            <div class="flex items-center gap-4 text-slate-500 text-sm border-y border-slate-100 py-4 mb-8">
+                <span>By <strong>{{ blog.author|default:"Admin" }}</strong></span>
+                <span class="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
+                <span>{{ formatted_date|date:"F d, Y" }}</span>
+            </div>
+
+            <!-- Featured Image -->
+            {% if blog.image %}
+            <div class="aspect-video w-full rounded-xl overflow-hidden mb-8 shadow-md">
+                <img src="{{ blog_image_url }}" alt="{{ blog.title }}" class="w-full h-full object-cover">
+            </div>
+            {% endif %}
+
+            <!-- Article Body Markup -->
+            <div class="prose prose-slate prose-lg max-w-none text-slate-800 leading-relaxed space-y-6">
+                {% if blog.description|slice:":1" == "[" or blog.description|slice:":1" == "{" %}
+                    {# Handle chunk arrays if it has been serialized as JSON #}
+                    {{ blog.description }}
+                {% else %}
+                    {{ blog.description|safe }}
+                {% endif %}
+            </div>
+        </article>
+
+        <!-- Dynamic Sidebar (Right column) -->
+        <aside class="space-y-8">
+            <!-- Recent News -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                <h3 class="text-lg font-bold text-slate-900 mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <span class="w-1 h-4 bg-blue-600 rounded-sm"></span>
+                    Recent Articles
+                </h3>
+                <div class="space-y-4">
+                    {% for recent in recent_blogs %}
+                    <a href="/blog/{{ recent.slug }}/" class="group block">
+                        <h4 class="text-sm font-semibold text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2">
+                            {{ recent.title }}
+                        </h4>
+                        <span class="text-xs text-slate-400 block mt-1">{{ recent.created_at|date:"M d, Y" }}</span>
+                    </a>
+                    {% empty %}
+                    <p class="text-slate-400 text-sm">No recent posts available.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Related Articles -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                <h3 class="text-lg font-bold text-slate-900 mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <span class="w-1 h-4 bg-orange-500 rounded-sm"></span>
+                    Related Articles
+                </h3>
+                <div class="space-y-4">
+                    {% for related in related_blogs %}
+                    <a href="/blog/{{ related.slug }}/" class="group block">
+                        <h4 class="text-sm font-semibold text-slate-800 group-hover:text-orange-500 transition-colors line-clamp-2">
+                            {{ related.title }}
+                        </h4>
+                    </a>
+                    {% empty %}
+                    <p class="text-slate-400 text-sm">No related posts.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}

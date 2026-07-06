@@ -61,3 +61,146 @@ class CategoryByMainCategoryQueryView(generics.ListAPIView):
         if main_category_name:
             queryset = queryset.filter(main_categories__name__iexact=main_category_name)
         return queryset
+
+
+# -------------------------------------------------------------
+# HTML AND XML ENDPOINTS FOR STATIC FRONTEND BYPASS
+# -------------------------------------------------------------
+from django.views import View
+from django.http import HttpResponse, Http404
+from django.shortcuts import render, get_object_or_404
+from django.utils.html import strip_tags
+from django.template.loader import render_to_string
+from django.contrib.syndication.views import Feed
+import datetime
+import re
+
+def get_current_domain(request):
+    # Retrieve host forwarded by Cloudflare Worker
+    host = request.META.get('HTTP_X_FORWARDED_HOST', request.META.get('HTTP_HOST', ''))
+    # Strip any www. prefix and lower case
+    clean_host = host.replace('www.', '').strip().lower()
+    return clean_host or 'urbanloanhub.store' # Default fallback for local testing
+
+class BlogPostDetailHtmlView(View):
+    def get(self, request, slug):
+        domain = get_current_domain(request)
+        
+        # Get post associated with this domain (MainCategory name) and slug
+        blog = get_object_or_404(
+            BlogPost.objects.select_related('main_category', 'category'),
+            slug=slug,
+            main_category__name__iexact=domain
+        )
+        
+        # Clean HTML tags from description to construct plain text SEO description
+        raw_description = blog.description
+        if isinstance(raw_description, list):
+            raw_description = " ".join(raw_description)
+        
+        clean_text = strip_tags(raw_description)
+        # Limit to 155 characters for search engines
+        seo_description = re.sub(r'\s+', ' ', clean_text).strip()[:155] + "..."
+        
+        # Fetch related blogs in same category, exclude current
+        related_blogs = BlogPost.objects.filter(
+            main_category__name__iexact=domain,
+            category=blog.category
+        ).exclude(id=blog.id).order_by('-created_at')[:3]
+        
+        # Fetch recent blogs for sidebar
+        recent_blogs = BlogPost.objects.filter(
+            main_category__name__iexact=domain
+        ).order_by('-created_at')[:5]
+
+        # Handle Cloudinary / Local media image optimization
+        blog_image_url = ""
+        if blog.image:
+            url = blog.image.url
+            if 'res.cloudinary.com' in url and '/upload/' in url:
+                blog_image_url = url.replace('/upload/', '/upload/f_auto,q_auto,w_1200/')
+            else:
+                blog_image_url = url
+        
+        context = {
+            'blog': blog,
+            'seo_description': seo_description,
+            'related_blogs': related_blogs,
+            'recent_blogs': recent_blogs,
+            'domain': domain,
+            'blog_image_url': blog_image_url,
+            'formatted_date': blog.blog_date or blog.created_at.date()
+        }
+        
+        return render(request, 'blogs/blog_detail.html', context)
+
+class DynamicSitemapView(View):
+    def get(self, request):
+        domain = get_current_domain(request)
+        
+        posts = BlogPost.objects.filter(
+            main_category__name__iexact=domain
+        ).order_by('-created_at')
+
+        # List of your static Next.js paths that reside on Hostinger
+        static_paths = [
+            '',
+            '/games/',
+            '/download/',
+            '/about/',
+            '/contact/',
+            '/privacy-policy/',
+        ]
+
+        context = {
+            'domain': domain,
+            'posts': posts,
+            'static_paths': static_paths,
+            'today': datetime.date.today().isoformat()
+        }
+
+        sitemap_xml = render_to_string('blogs/sitemap.xml', context)
+        return HttpResponse(sitemap_xml, content_type='application/xml')
+
+class DynamicRobotsTxtView(View):
+    def get(self, request):
+        domain = get_current_domain(request)
+        content = f"""User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+Sitemap: https://{domain}/sitemap.xml
+"""
+        return HttpResponse(content, content_type='text/plain')
+
+class DynamicRssFeedView(Feed):
+    def get_object(self, request):
+        return get_current_domain(request)
+
+    def title(self, obj):
+        return f"Blog Feed | {obj}"
+
+    def link(self, obj):
+        return f"https://{obj}/blog/"
+
+    def description(self, obj):
+        return f"Stay updated with the latest articles and stories from {obj}."
+
+    def items(self, obj):
+        return BlogPost.objects.filter(
+            main_category__name__iexact=obj
+        ).order_by('-created_at')[:20]
+
+    def item_title(self, item):
+        return item.title
+
+    def item_description(self, item):
+        desc = item.description
+        if isinstance(desc, list):
+            desc = " ".join(desc)
+        return strip_tags(desc)[:200] + "..."
+
+    def item_link(self, item):
+        return f"https://{item.main_category.name}/blog/{item.slug}/"
+
