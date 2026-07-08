@@ -110,19 +110,20 @@ class Command(BaseCommand):
     #  Main handle                                                         #
     # ------------------------------------------------------------------ #
     def handle(self, *args, **kwargs):
-        main_categories = MainCategory.objects.all()
-        if not main_categories:
-            self.stdout.write(self.style.ERROR('No main categories found'))
+        categories = Category.objects.filter(main_categories__isnull=False).distinct()
+        if not categories:
+            self.stdout.write(self.style.ERROR('No categories with domain access found'))
             return
 
         def is_duplicate(title):
             return BlogPost.objects.filter(title__iexact=title).exists()
 
-        for main_cat in main_categories:
-            for cat in main_cat.categories.all():
-                self.stdout.write(f"\n{'='*60}")
-                self.stdout.write(f"Generating: {main_cat.name} → {cat.name}")
-                self.stdout.write('='*60)
+        for cat in categories:
+            associated_mains = cat.main_categories.all()
+            main_cat_names = [mc.name for mc in associated_mains]
+            self.stdout.write(f"\n{'='*60}")
+            self.stdout.write(f"Generating for category: {cat.name} (Assigned to: {', '.join(main_cat_names)})")
+            self.stdout.write('='*60)
 
                 # -------------------------------------------------------- #
                 # 1. Fetch RSS trends (US or UK)                            #
@@ -356,7 +357,6 @@ class Command(BaseCommand):
                 slug = slugify(title) + "-" + str(random.randint(1000, 9999))
 
                 blog = BlogPost(
-                    main_category=main_cat,
                     category=cat,
                     title=title,
                     slug=slug,
@@ -393,6 +393,7 @@ class Command(BaseCommand):
                 # 8. Save blog to database                                  #
                 # -------------------------------------------------------- #
                 blog.save()
+                blog.main_categories.set(associated_mains)
                 self.stdout.write(
                     self.style.SUCCESS(
                         f"✅ Blog created: \"{title}\" ({len(content_text.split())} words, "

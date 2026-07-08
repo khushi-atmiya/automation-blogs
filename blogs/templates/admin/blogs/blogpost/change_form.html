@@ -3,7 +3,7 @@
 {% block extrahead %}
 {{ block.super }}
 <script>
-    // Server side thi badha categories na data inject karo
-    var CATEGORIES_BY_MAIN = {{ categories_by_main_json | safe }};
+    // Server side thi category na main categories data inject karo
+    var MAINS_BY_CATEGORY = {{ mains_by_category_json | safe }};
 </script>
 {% endblock %}

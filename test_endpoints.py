@@ -22,7 +22,7 @@ def test_rendering():
     domain = domains[0]
     
     # Fetch posts for this domain
-    posts = BlogPost.objects.filter(main_category__name__iexact=domain)
+    posts = BlogPost.objects.filter(main_categories__name__iexact=domain).distinct()
     print(f"--- Found {posts.count()} posts for domain '{domain}' ---")
     
     if not posts.exists():
@@ -31,7 +31,6 @@ def test_rendering():
         cat, _ = Category.objects.get_or_create(name='technology')
         mc = MainCategory.objects.get(name__iexact=domain)
         post = BlogPost.objects.create(
-            main_category=mc,
             category=cat,
             title='Test Blog Post on ' + domain,
             slug='test-blog-post-on-domain',
@@ -39,6 +38,7 @@ def test_rendering():
             author='Test Agent',
             blog_date=datetime.date.today() if 'datetime' in globals() else None
         )
+        post.main_categories.add(mc)
     else:
         post = posts.first()
         

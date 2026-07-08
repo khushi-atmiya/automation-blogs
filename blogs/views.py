@@ -26,14 +26,14 @@ class BlogPostByMainCategoryNameView(generics.ListAPIView):
 
     def get_queryset(self):
         main_category_name = self.kwargs['main_category_name']
-        return BlogPost.objects.filter(main_category__name__iexact=main_category_name)
+        return BlogPost.objects.filter(main_categories__name__iexact=main_category_name).distinct()
 
 class BlogPostByCategoryNameView(generics.ListAPIView):
     serializer_class = BlogPostSerializer
 
     def get_queryset(self):
         category_name = self.kwargs['category_name']
-        return BlogPost.objects.filter(category__name__iexact=category_name)
+        return BlogPost.objects.filter(category__name__iexact=category_name).distinct()
 
 class BlogPostByCombinedFilterView(generics.ListAPIView):
     serializer_class = BlogPostSerializer
@@ -42,9 +42,9 @@ class BlogPostByCombinedFilterView(generics.ListAPIView):
         main_category_name = self.kwargs['main_category_name']
         category_name = self.kwargs['category_name']
         return BlogPost.objects.filter(
-            main_category__name__iexact=main_category_name,
+            main_categories__name__iexact=main_category_name,
             category__name__iexact=category_name
-        )
+        ).distinct()
 
 # Admin JS mate - selected main category na j categories return karo
 class CategoriesByMainCategoryView(APIView):
@@ -88,9 +88,9 @@ class BlogPostDetailHtmlView(View):
         
         # Get post associated with this domain (MainCategory name) and slug
         blog = get_object_or_404(
-            BlogPost.objects.select_related('main_category', 'category'),
+            BlogPost.objects.prefetch_related('main_categories').select_related('category'),
             slug=slug,
-            main_category__name__iexact=domain
+            main_categories__name__iexact=domain
         )
         
         # Clean HTML tags from description to construct plain text SEO description
@@ -104,14 +104,14 @@ class BlogPostDetailHtmlView(View):
         
         # Fetch related blogs in same category, exclude current
         related_blogs = BlogPost.objects.filter(
-            main_category__name__iexact=domain,
+            main_categories__name__iexact=domain,
             category=blog.category
-        ).exclude(id=blog.id).order_by('-created_at')[:3]
+        ).exclude(id=blog.id).order_by('-created_at').distinct()[:3]
         
         # Fetch recent blogs for sidebar
         recent_blogs = BlogPost.objects.filter(
-            main_category__name__iexact=domain
-        ).order_by('-created_at')[:5]
+            main_categories__name__iexact=domain
+        ).order_by('-created_at').distinct()[:5]
 
         # Handle Cloudinary / Local media image optimization
         blog_image_url = ""
@@ -133,14 +133,14 @@ class BlogPostDetailHtmlView(View):
         }
         
         return render(request, 'blogs/blog_detail.html', context)
-
+ 
 class DynamicSitemapView(View):
     def get(self, request):
         domain = get_current_domain(request)
         
         posts = BlogPost.objects.filter(
-            main_category__name__iexact=domain
-        ).order_by('-created_at')
+            main_categories__name__iexact=domain
+        ).order_by('-created_at').distinct()
 
         # List of your static Next.js paths that reside on Hostinger
         static_paths = [
@@ -176,7 +176,8 @@ Sitemap: https://{domain}/sitemap.xml
 
 class DynamicRssFeedView(Feed):
     def get_object(self, request):
-        return get_current_domain(request)
+        self.domain = get_current_domain(request)
+        return self.domain
 
     def title(self, obj):
         return f"Blog Feed | {obj}"
@@ -189,8 +190,8 @@ class DynamicRssFeedView(Feed):
 
     def items(self, obj):
         return BlogPost.objects.filter(
-            main_category__name__iexact=obj
-        ).order_by('-created_at')[:20]
+            main_categories__name__iexact=obj
+        ).order_by('-created_at').distinct()[:20]
 
     def item_title(self, item):
         return item.title
@@ -202,5 +203,6 @@ class DynamicRssFeedView(Feed):
         return strip_tags(desc)[:200] + "..."
 
     def item_link(self, item):
-        return f"https://{item.main_category.name}/blog/{item.slug}/"
+        domain = getattr(self, 'domain', 'urbanloanhub.store')
+        return f"https://{domain}/blog/{item.slug}/"
 

@@ -1,72 +1,31 @@
 document.addEventListener('DOMContentLoaded', function () {
-    var mainCatField = document.getElementById('id_main_category');
     var catField = document.getElementById('id_category');
+    var mainCatsField = document.getElementById('id_main_categories');
 
-    if (!mainCatField || !catField) return;
+    if (!catField || !mainCatsField) return;
 
-    // Badha options store karo
-    var allOptions = Array.from(catField.options).map(function (o) {
-        return { value: o.value, text: o.text };
-    });
-
-    function filterByMainCat(mainCatId) {
-        // Pehla CATEGORIES_BY_MAIN try karo (template thi inject)
-        if (window.CATEGORIES_BY_MAIN && mainCatId) {
-            var filtered = window.CATEGORIES_BY_MAIN[String(mainCatId)];
-            if (filtered) {
-                catField.innerHTML = '<option value="">---------</option>';
-                filtered.forEach(function (cat) {
-                    var opt = document.createElement('option');
-                    opt.value = cat.id;
-                    opt.textContent = cat.name;
-                    catField.appendChild(opt);
+    function autoSelectMainCats(catId) {
+        if (!catId) return;
+        if (window.MAINS_BY_CATEGORY) {
+            var mainCatIds = window.MAINS_BY_CATEGORY[String(catId)];
+            if (mainCatIds) {
+                Array.from(mainCatsField.options).forEach(function (option) {
+                    option.selected = mainCatIds.includes(parseInt(option.value));
                 });
-                return;
+                var event = new Event('change', { bubbles: true });
+                mainCatsField.dispatchEvent(event);
             }
         }
-
-        // Fallback: AJAX thi fetch karo
-        fetch('/api/categories-by-main/' + mainCatId + '/')
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                catField.innerHTML = '<option value="">---------</option>';
-                data.forEach(function (cat) {
-                    var opt = document.createElement('option');
-                    opt.value = cat.id;
-                    opt.textContent = cat.name;
-                    catField.appendChild(opt);
-                });
-            })
-            .catch(function () {});
     }
 
-    function showAll() {
-        catField.innerHTML = '<option value="">---------</option>';
-        allOptions.forEach(function (o) {
-            if (o.value !== '') {
-                var opt = document.createElement('option');
-                opt.value = o.value;
-                opt.textContent = o.text;
-                catField.appendChild(opt);
-            }
-        });
-    }
-
-    // Main category change event
-    mainCatField.addEventListener('change', function () {
-        if (!this.value) {
-            showAll();
-        } else {
-            filterByMainCat(this.value);
-        }
+    // Category change event to auto-select main categories
+    catField.addEventListener('change', function () {
+        autoSelectMainCats(this.value);
     });
 
-    // Page load par already selected hoy to filter karo
-    if (mainCatField.value) {
-        var existingCat = catField.value;
-        filterByMainCat(mainCatField.value);
-        setTimeout(function () {
-            catField.value = existingCat;
-        }, 300);
+    // Auto-select on page load for new objects (where no main categories are selected yet)
+    var isAnySelected = Array.from(mainCatsField.options).some(function(o) { return o.selected; });
+    if (catField.value && !isAnySelected) {
+        autoSelectMainCats(catField.value);
     }
 });

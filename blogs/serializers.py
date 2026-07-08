@@ -14,7 +14,7 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'main_categories', 'name']
 
 class BlogPostSerializer(serializers.ModelSerializer):
-    main_category = serializers.SlugRelatedField(slug_field='name', queryset=MainCategory.objects.all())
+    main_categories = serializers.SlugRelatedField(many=True, slug_field='name', queryset=MainCategory.objects.all())
     category = serializers.SlugRelatedField(slug_field='name', queryset=Category.objects.all())
 
     class Meta:
