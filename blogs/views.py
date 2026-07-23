@@ -206,3 +206,29 @@ class DynamicRssFeedView(Feed):
         domain = getattr(self, 'domain', 'urbanloanhub.store')
         return f"https://{domain}/blog/{item.slug}/"
 
+
+import threading
+from django.core.management import call_command
+from django.http import JsonResponse
+import os
+
+def run_daily_blogs_webhook(request):
+    # Security check: Ensure only our cron-job.org task can trigger this
+    secret = request.GET.get("secret")
+    expected_secret = os.environ.get("CRON_SECRET", "automation123")
+    
+    if secret != expected_secret:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    # Run the command in a background thread so the HTTP request doesn't timeout
+    def run_command():
+        try:
+            call_command("generate_blogs")
+        except Exception as e:
+            print(f"Error running generate_blogs: {e}")
+
+    thread = threading.Thread(target=run_command)
+    thread.start()
+
+    return JsonResponse({"status": "success", "message": "Blog generation started in background"})
+

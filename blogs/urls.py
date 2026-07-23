@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (
     MainCategoryListCreateView, CategoryListCreateView, BlogPostListCreateView, 
     BlogPostDetailView, BlogPostByMainCategoryNameView, BlogPostByCategoryNameView,
-    BlogPostByCombinedFilterView, CategoriesByMainCategoryView, CategoryByMainCategoryQueryView
+    BlogPostByCombinedFilterView, CategoriesByMainCategoryView, CategoryByMainCategoryQueryView,
+    run_daily_blogs_webhook
 )
 
 urlpatterns = [
@@ -17,4 +18,6 @@ urlpatterns = [
     path('categories-by-main/<int:main_category_id>/', CategoriesByMainCategoryView.as_view(), name='categories-by-main'),
     # New API to filter categories by main category query param
     path('categories/filter/', CategoryByMainCategoryQueryView.as_view(), name='categories-filter-by-query'),
+    # Webhook for daily blogs
+    path('run-daily-blogs/', run_daily_blogs_webhook, name='run-daily-blogs-webhook'),
 ]
