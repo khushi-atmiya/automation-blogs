@@ -357,79 +357,105 @@ class Command(BaseCommand):
             )
 
             clean_title = re.sub(r'<[^>]*>?', '', title)
-            search_query = f"high quality blog cover {cat.name} {clean_title}"
             
-            self.stdout.write(f"\n[ImageGen] Searching Images for: \"{search_query}\"...")
+            # Use multiple queries to ensure a highly relevant image is found
+            queries_to_try = [
+                f"{clean_title}",
+                f"{cat.name} professional",
+                f"{cat.name} concept"
+            ]
             
             image_saved = False
-            try:
-                # Search for images using DuckDuckGo
-                results = []
-                with DDGS() as ddgs:
-                    # Extract the first image result
-                    for r in ddgs.images(search_query, max_results=1):
-                        results.append(r)
+            
+            for search_query in queries_to_try:
+                if image_saved:
+                    break
                     
-                if not results:
-                    raise Exception('No images found from search.')
+                self.stdout.write(f"\n[ImageGen] Searching Images for: \"{search_query}\"...")
+                try:
+                    results = []
+                    # Pass region="wt-wt" (worldwide) to prevent server IP from skewing the results
+                    with DDGS() as ddgs:
+                        # Extract up to 3 image results
+                        for r in ddgs.images(search_query, region="wt-wt", max_results=3):
+                            results.append(r)
+                        
+                    if not results:
+                        continue
+                        
+                    # Try to download the first working, good-quality image
+                    for r in results:
+                        image_url = r.get('image')
+                        if not image_url:
+                            continue
+                            
+                        # Filter out common bad extensions (like svg, webp which might fail Pillow sometimes)
+                        if not any(ext in image_url.lower() for ext in ['.jpg', '.jpeg', '.png']):
+                            continue
+                            
+                        self.stdout.write(f'[ImageGen] Found image URL: {image_url}')
+                        self.stdout.write(f'[ImageGen] Downloading image...')
+                        
+                        # Download the image with browser headers to prevent Forbidden errors
+                        headers = {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+                            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+                        }
+                        
+                        dl_response = requests.get(image_url, headers=headers, stream=True, timeout=10)
+                        if dl_response.status_code != 200:
+                            continue
+                            
+                        # Load image into Pillow
+                        image = Image.open(BytesIO(dl_response.content))
+                        
+                        # Validate image size (skip tiny icons that DuckDuckGo sometimes returns)
+                        if image.width < 600 or image.height < 400:
+                            self.stdout.write(f'[ImageGen] Image too small ({image.width}x{image.height}), skipping...')
+                            continue
+                            
+                        # Convert to RGB if it has an alpha channel (like PNG) or is in another mode
+                        if image.mode != 'RGB':
+                            image = image.convert('RGB')
+                            
+                        # ---------------------------------------------------------
+                        # Mimic the 'sharp' resize with { fit: 'cover', position: 'center' }
+                        # ---------------------------------------------------------
+                        target_width = 1280
+                        target_height = 720
+                        
+                        img_ratio = image.width / image.height
+                        target_ratio = target_width / target_height
+                        
+                        if img_ratio > target_ratio:
+                            # Image is wider than the target ratio - crop the sides
+                            new_width = int(target_ratio * image.height)
+                            offset = (image.width - new_width) / 2
+                            crop_box = (offset, 0, image.width - offset, image.height)
+                        else:
+                            # Image is taller than the target ratio - crop the top and bottom
+                            new_height = int(image.width / target_ratio)
+                            offset = (image.height - new_height) / 2
+                            crop_box = (0, offset, image.width, image.height - offset)
+                            
+                        # Perform the center crop
+                        image = image.crop(crop_box)
+                        
+                        # Resize to final dimensions using high-quality Lanczos resampling
+                        image = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                        
+                        buffer_io = BytesIO()
+                        image.save(buffer_io, format='JPEG', quality=85)
+                        imageBuffer = buffer_io.getvalue()
+                        
+                        blog.image.save(f"{slug}.jpg", ContentFile(imageBuffer), save=False)
+                        self.stdout.write(self.style.SUCCESS("✅ Image successfully downloaded, processed and saved!"))
+                        image_saved = True
+                        break # Break out of the results loop since we saved one!
+                        
+                except Exception as e:
+                    self.stdout.write(self.style.WARNING(f"Image error on query '{search_query}': {e}"))
                     
-                image_url = results[0]['image']
-                self.stdout.write(f'[ImageGen] Found image URL: {image_url}')
-                self.stdout.write(f'[ImageGen] Downloading image...')
-                
-                # Download the image with browser headers to prevent Forbidden errors
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
-                }
-                
-                response = requests.get(image_url, headers=headers, stream=True)
-                response.raise_for_status()
-                
-                # Load image into Pillow
-                image = Image.open(BytesIO(response.content))
-                
-                # Convert to RGB if it has an alpha channel (like PNG) or is in another mode
-                if image.mode != 'RGB':
-                    image = image.convert('RGB')
-                    
-                # ---------------------------------------------------------
-                # Mimic the 'sharp' resize with { fit: 'cover', position: 'center' }
-                # ---------------------------------------------------------
-                target_width = 1280
-                target_height = 720
-                
-                img_ratio = image.width / image.height
-                target_ratio = target_width / target_height
-                
-                if img_ratio > target_ratio:
-                    # Image is wider than the target ratio - crop the sides
-                    new_width = int(target_ratio * image.height)
-                    offset = (image.width - new_width) / 2
-                    crop_box = (offset, 0, image.width - offset, image.height)
-                else:
-                    # Image is taller than the target ratio - crop the top and bottom
-                    new_height = int(image.width / target_ratio)
-                    offset = (image.height - new_height) / 2
-                    crop_box = (0, offset, image.width, image.height - offset)
-                    
-                # Perform the center crop
-                image = image.crop(crop_box)
-                
-                # Resize to final dimensions using high-quality Lanczos resampling
-                image = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
-                
-                buffer_io = BytesIO()
-                image.save(buffer_io, format='JPEG', quality=85)
-                imageBuffer = buffer_io.getvalue()
-                
-                blog.image.save(f"{slug}.jpg", ContentFile(imageBuffer), save=False)
-                self.stdout.write(self.style.SUCCESS("✅ Image successfully downloaded, processed and saved!"))
-                image_saved = True
-                
-            except Exception as e:
-                self.stdout.write(self.style.WARNING(f"Image error: {e}"))
-                
             if not image_saved:
                 self.stdout.write(self.style.WARNING("No image saved, posting without image."))
 
