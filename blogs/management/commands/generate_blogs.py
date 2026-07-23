@@ -8,7 +8,7 @@ import json
 from io import BytesIO
 from PIL import Image
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from django.core.management.base import BaseCommand
 from django.core.files.base import ContentFile
@@ -359,44 +359,35 @@ class Command(BaseCommand):
             clean_title = re.sub(r'<[^>]*>?', '', title)
             search_query = f"high quality blog cover {cat.name} {clean_title}"
             
-            self.stdout.write(f"Searching Images for: \"{search_query}\"...")
+            self.stdout.write(f"\n[ImageGen] Searching Images for: \"{search_query}\"...")
             
             image_saved = False
             try:
                 # Search for images using DuckDuckGo
                 results = []
                 with DDGS() as ddgs:
-                    # Extract the first few image results as fallbacks
-                    for r in ddgs.images(search_query, max_results=5):
+                    # Extract the first image result
+                    for r in ddgs.images(search_query, max_results=1):
                         results.append(r)
                     
                 if not results:
                     raise Exception('No images found from search.')
                     
-                image = None
-                for result in results:
-                    image_url = result['image']
-                    self.stdout.write(f'  [ImageGen] Trying image URL: {image_url}')
-                    
-                    # Download the image with browser headers to prevent Forbidden errors
-                    headers = {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-                        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
-                    }
-                    
-                    try:
-                        response = requests.get(image_url, headers=headers, stream=True, timeout=15)
-                        response.raise_for_status()
-                        
-                        # Load image into Pillow
-                        image = Image.open(BytesIO(response.content))
-                        break # Successfully downloaded, exit loop
-                    except Exception as dl_err:
-                        self.stdout.write(self.style.WARNING(f'  [ImageGen] Failed to download {image_url}: {dl_err}'))
-                        continue
-                        
-                if not image:
-                    raise Exception('Failed to download any images from the search results.')
+                image_url = results[0]['image']
+                self.stdout.write(f'[ImageGen] Found image URL: {image_url}')
+                self.stdout.write(f'[ImageGen] Downloading image...')
+                
+                # Download the image with browser headers to prevent Forbidden errors
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+                }
+                
+                response = requests.get(image_url, headers=headers, stream=True)
+                response.raise_for_status()
+                
+                # Load image into Pillow
+                image = Image.open(BytesIO(response.content))
                 
                 # Convert to RGB if it has an alpha channel (like PNG) or is in another mode
                 if image.mode != 'RGB':
@@ -438,7 +429,7 @@ class Command(BaseCommand):
                 
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"Image error: {e}"))
-
+                
             if not image_saved:
                 self.stdout.write(self.style.WARNING("No image saved, posting without image."))
 
@@ -457,5 +448,4 @@ class Command(BaseCommand):
             # Rate limit pacing: Wait 10 seconds before generating the next blog
             # to stay comfortably below Google's 15 requests/minute free tier limit.
             self.stdout.write(self.style.WARNING("Waiting 10 seconds before starting the next blog to avoid rate limits..."))
-            import time
             time.sleep(10)
