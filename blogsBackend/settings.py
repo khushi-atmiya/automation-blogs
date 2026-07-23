@@ -90,7 +90,9 @@ WSGI_APPLICATION = 'blogsBackend.wsgi.application'
 
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.getenv("DATABASE_URL")
+        default=os.getenv("DATABASE_URL"),
+        conn_max_age=600,
+        conn_health_checks=True,
     )
 }
 
@@ -136,9 +138,15 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'blogs', 'static')]
 
+# Storage Configuration (Local File System in development, Cloudinary in production)
+if DEBUG:
+    DEFAULT_STORAGE_BACKEND = "django.core.files.storage.FileSystemStorage"
+else:
+    DEFAULT_STORAGE_BACKEND = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
 STORAGES = {
     "default": {
-        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        "BACKEND": DEFAULT_STORAGE_BACKEND,
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
