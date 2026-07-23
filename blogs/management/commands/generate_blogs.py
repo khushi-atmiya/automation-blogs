@@ -18,7 +18,6 @@ from blogs.models import MainCategory, Category, BlogPost
 
 class Command(BaseCommand):
     help = 'Auto Blog Generator — Pollinations.ai (No API Key Required)'
-   
        # ------------------------------------------------------------------ #
     #  Helper: call Pollinations text API with retry                       #
     # ------------------------------------------------------------------ #
