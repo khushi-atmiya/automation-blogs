@@ -8,7 +8,7 @@ import json
 from io import BytesIO
 from PIL import Image
 from bs4 import BeautifulSoup
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 
 from django.core.management.base import BaseCommand
 from django.core.files.base import ContentFile
