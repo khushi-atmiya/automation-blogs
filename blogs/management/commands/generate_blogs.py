@@ -121,6 +121,126 @@ class Command(BaseCommand):
             return first_trend[:100]
         return f"{cat_name} Latest News and Updates"
 
+    def _generate_image_search_query(self, title, cat_name):
+        """Generate a short 2-3 word search query to find relevant stock photos."""
+        prompt = (
+            f"Based on the blog post title: '{title}' and category: '{cat_name}', "
+            f"write a simple, professional 2 to 3 word search query (such as 'home loan application', "
+            f"'startup team workspace', or 'mediterranean diet plate') to find a relevant, high-quality cover photo. "
+            f"Output ONLY the search query text, with no quotes, no extra words, and no explanations."
+        )
+        self.stdout.write("  [ImageGen] Asking Gemini for a clean 2-3 word search query...")
+        raw = self._pollinations_text(prompt, retries=2, timeout=30)
+        if raw:
+            # Clean quotes, trailing periods, and leading/trailing spaces
+            clean = raw.strip().replace('"', '').replace("'", "").strip('.')
+            if clean and len(clean.split()) <= 5:
+                self.stdout.write(self.style.SUCCESS(f"  [ImageGen] Gemini generated query: \"{clean}\""))
+                return clean
+        
+        # Fallback to category name if Gemini fails or returns something too long
+        self.stdout.write(self.style.WARNING("  [ImageGen] Gemini query generation failed or returned invalid query. Using category name fallback."))
+        return cat_name
+
+    def _search_images(self, search_query):
+        """Try DuckDuckGo search first, then fall back to Bing scraping and Wikimedia API."""
+        import os
+        import urllib.parse
+        import html
+        import re
+        
+        results = []
+        
+        # 1. Try DuckDuckGo Image Search (with proxy if configured)
+        proxy = os.environ.get("DDGS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY")
+        self.stdout.write(f"  [ImageGen] Searching DuckDuckGo for: \"{search_query}\" (Proxy: {bool(proxy)})...")
+        try:
+            # Safely try to instantiate DDGS with proxy.
+            try:
+                ddgs = DDGS(proxy=proxy)
+            except TypeError:
+                ddgs = DDGS()
+                
+            with ddgs:
+                for r in ddgs.images(search_query, region="wt-wt", max_results=5):
+                    if r.get('image'):
+                        results.append(r.get('image'))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"  [ImageGen] DuckDuckGo search failed/blocked: {e}"))
+            
+        if results:
+            self.stdout.write(self.style.SUCCESS(f"  [ImageGen] DuckDuckGo returned {len(results)} image URLs."))
+            return results
+
+        # 2. Fallback to Bing Image Scraping
+        self.stdout.write(f"  [ImageGen] DDGS failed/blocked. Falling back to Bing Image Scraping for: \"{search_query}\"...")
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            url = f"https://www.bing.com/images/search?q={urllib.parse.quote(search_query)}&first=1&count=15"
+            res = requests.get(url, headers=headers, timeout=10)
+            if res.status_code == 200:
+                m_attrs = re.findall(r'm="(\{[^"]*\})"', res.text)
+                for raw_json in m_attrs:
+                    decoded = html.unescape(raw_json)
+                    murl_match = re.search(r'"murl"\s*:\s*"(https?://[^"]+)"', decoded)
+                    if murl_match:
+                        u = murl_match.group(1)
+                        if any(ext in u.lower() for ext in ['.jpg', '.jpeg', '.png']):
+                            if u not in results:
+                                results.append(u)
+                                if len(results) >= 5:
+                                    break
+                
+                # Try OIP thumbnail fallback if no source URL found
+                if not results:
+                    oip_matches = re.findall(r'(https?://[^\s"\'\\<>]+?\.bing\.net/th/id/OIP\.[^\s"\'\\<>]+)', res.text)
+                    for m in oip_matches:
+                        u = html.unescape(m)
+                        if "?" in u:
+                            u = u.split("?")[0]
+                        if u not in results:
+                            results.append(u)
+                            if len(results) >= 5:
+                                break
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"  [ImageGen] Bing search fallback failed: {e}"))
+            
+        if results:
+            self.stdout.write(self.style.SUCCESS(f"  [ImageGen] Bing search returned {len(results)} image URLs."))
+            return results
+
+        # 3. Fallback to Wikimedia Commons API
+        self.stdout.write(f"  [ImageGen] Bing scraping failed. Falling back to Wikimedia Commons API for: \"{search_query}\"...")
+        try:
+            api_url = "https://commons.wikimedia.org/w/api.php"
+            params = {
+                "action": "query",
+                "generator": "search",
+                "gsrsearch": search_query,
+                "gsrnamespace": 6,
+                "gsrlimit": 5,
+                "prop": "imageinfo",
+                "iiprop": "url",
+                "format": "json"
+            }
+            res = requests.get(api_url, params=params, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                pages = data.get("query", {}).get("pages", {})
+                for pid, pinfo in pages.items():
+                    imageinfo = pinfo.get("imageinfo", [{}])[0]
+                    img_url = imageinfo.get("url", "")
+                    if img_url and any(ext in img_url.lower() for ext in ['.jpg', '.jpeg', '.png']):
+                        if img_url not in results:
+                            results.append(img_url)
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"  [ImageGen] Wikimedia API fallback failed: {e}"))
+
+        self.stdout.write(f"  [ImageGen] Total fallback images found: {len(results)}")
+        return results
+
     # ------------------------------------------------------------------ #
     #  Main handle                                                         #
     # ------------------------------------------------------------------ #
@@ -356,11 +476,12 @@ class Command(BaseCommand):
                 description=description,
             )
 
-            clean_title = re.sub(r'<[^>]*>?', '', title)
+            # Generate smart 2-3 word search query via Gemini
+            optimized_query = self._generate_image_search_query(title, cat.name)
             
-            # Use multiple queries to ensure a highly relevant image is found
+            # Use multiple queries as fallbacks if the optimized query returns nothing
             queries_to_try = [
-                f"{clean_title}",
+                optimized_query,
                 f"{cat.name} professional",
                 f"{cat.name} concept"
             ]
@@ -371,24 +492,16 @@ class Command(BaseCommand):
                 if image_saved:
                     break
                     
-                self.stdout.write(f"\n[ImageGen] Searching Images for: \"{search_query}\"...")
+                self.stdout.write(f"\n[ImageGen] Querying Image Sources for: \"{search_query}\"...")
                 try:
-                    results = []
-                    # Pass region="wt-wt" (worldwide) to prevent server IP from skewing the results
-                    with DDGS() as ddgs:
-                        # Extract up to 3 image results
-                        for r in ddgs.images(search_query, region="wt-wt", max_results=3):
-                            results.append(r)
-                        
-                    if not results:
+                    # Search using the new multi-source search helper
+                    image_urls = self._search_images(search_query)
+                    
+                    if not image_urls:
                         continue
                         
                     # Try to download the first working, good-quality image
-                    for r in results:
-                        image_url = r.get('image')
-                        if not image_url:
-                            continue
-                            
+                    for image_url in image_urls:
                         # Filter out common bad extensions (like svg, webp which might fail Pillow sometimes)
                         if not any(ext in image_url.lower() for ext in ['.jpg', '.jpeg', '.png']):
                             continue
