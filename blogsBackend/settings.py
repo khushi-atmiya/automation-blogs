@@ -138,11 +138,11 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'blogs', 'static')]
 
-# Storage Configuration (Local File System in development, Cloudinary in production)
-if DEBUG:
-    DEFAULT_STORAGE_BACKEND = "django.core.files.storage.FileSystemStorage"
-else:
+# Storage Configuration (Use Cloudinary if CLOUDINARY_URL is set in environment, otherwise local filesystem)
+if os.environ.get("CLOUDINARY_URL"):
     DEFAULT_STORAGE_BACKEND = "cloudinary_storage.storage.MediaCloudinaryStorage"
+else:
+    DEFAULT_STORAGE_BACKEND = "django.core.files.storage.FileSystemStorage"
 
 STORAGES = {
     "default": {
