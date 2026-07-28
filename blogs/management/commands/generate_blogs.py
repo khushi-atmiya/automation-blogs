@@ -89,10 +89,12 @@ class Command(BaseCommand):
                 first_trend = clean
                 break
 
-        # Very short prompt — avoids triggering Pollinations' chain-of-thought
+        # Enforce that the title must focus on the category name, using the news story as inspiration if relevant.
         title_prompt = (
-            f"Write ONE blog post title (8 to 11 words) about this news story: {first_trend}. "
-            f"Make it engaging and professional. Output ONLY the title text, nothing else."
+            f"Write ONE blog post title (8 to 11 words) for the category '{cat_name}'. "
+            f"Use this news story as context/inspiration: '{first_trend}'. "
+            f"Crucially, the title MUST be directly and clearly about '{cat_name}' (e.g. if category is 'SIP Guide', the title must be about SIP investing, not about drinking gin or sips). "
+            f"Output ONLY the title text, nothing else."
         )
         raw = self._pollinations_text(title_prompt, retries=3, timeout=45)
 
@@ -124,9 +126,8 @@ class Command(BaseCommand):
     def _generate_image_search_query(self, title, cat_name):
         """Generate a short 2-3 word search query to find relevant stock photos."""
         prompt = (
-            f"Based on the blog post title: '{title}' and category: '{cat_name}', "
-            f"write a simple, professional 2 to 3 word search query (such as 'home loan application', "
-            f"'startup team workspace', or 'mediterranean diet plate') to find a relevant, high-quality cover photo. "
+            f"Identify the main subject in this blog title: '{title}'. "
+            f"Write a simple, professional 2 to 3 word search query to find a matching stock photo representing this subject on a site like Unsplash. "
             f"Output ONLY the search query text, with no quotes, no extra words, and no explanations."
         )
         self.stdout.write("  [ImageGen] Asking Gemini for a clean 2-3 word search query...")
@@ -311,9 +312,11 @@ class Command(BaseCommand):
             main_prompt = (
                 f"{persona}\n\n"
                 f"Write a comprehensive, highly monetizable, and deeply analytical blog post titled '{title}'.\n\n"
-                f"CORE TOPICS TO COVER:\n{trends}\n\n"
+                f"CORE TOPICS TO COVER:\n{trends}\n"
+                f"(CRITICAL: Only cover these topics/news if they are directly relevant to the category '{cat.name}'. "
+                f"If the news context is unrelated to '{cat.name}', ignore it and write a comprehensive guide/analysis solely about '{cat.name}').\n\n"
                 f"FOCUS AREAS:\n"
-                f"- CATEGORY: Deeply focus on the core category '{cat.name}'. Ensure this topic is the absolute central theme.\n"
+                f"- CATEGORY: Deeply focus on the core category '{cat.name}'. Ensure this topic is the absolute central theme. Do NOT write about unrelated main categories or news.\n"
                 f"- LOCATION CONTEXT: {target_region} (Heavily focus on {target_region} specifically, including {target_region} local impact, {target_region} regulations, and {target_region} market trends).\n"
                 f"- HIGH CPM KEYWORDS: Naturally integrate high CPM (Cost Per Mille) and high CPC keywords relevant to '{cat.name}' in the {target_region} market (e.g., enterprise solutions, finance, insurance, specialized services, B2B).\n\n"
                 f"STRICT REQUIREMENTS:\n"
