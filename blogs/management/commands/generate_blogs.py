@@ -561,7 +561,9 @@ class Command(BaseCommand):
                         image.save(buffer_io, format='JPEG', quality=85)
                         imageBuffer = buffer_io.getvalue()
                         
-                        blog.image.save(f"{slug}.jpg", ContentFile(imageBuffer), save=False)
+                        # Keep the image filename short (under 50 chars) to prevent varchar(100) overflow in database
+                        short_img_name = f"{slugify(title)[:35]}-{random.randint(1000, 9999)}.jpg"
+                        blog.image.save(short_img_name, ContentFile(imageBuffer), save=False)
                         self.stdout.write(self.style.SUCCESS("✅ Image successfully downloaded, processed and saved!"))
                         image_saved = True
                         break # Break out of the results loop since we saved one!
