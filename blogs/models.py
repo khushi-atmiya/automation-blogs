@@ -32,7 +32,7 @@ class BlogPost(models.Model):
     def __str__(self):
         return self.title
 
-from django.db.models.signals import m2m_changed, post_save
+from django.db.models.signals import m2m_changed, post_save, post_delete
 from django.dispatch import receiver
 import requests
 import re
@@ -103,5 +103,36 @@ def trigger_hostinger_meta_upload(sender, instance, created, **kwargs):
 def trigger_hostinger_meta_upload_m2m(sender, instance, action, **kwargs):
     if action in ["post_add", "post_set"]:
         send_meta_webhook_for_post(instance)
+
+@receiver(post_delete, sender=BlogPost)
+def trigger_hostinger_meta_delete(sender, instance, **kwargs):
+    """When a BlogPost is deleted in Django Admin, send delete webhook to all assigned Hostinger domains."""
+    try:
+        domains = instance.main_categories.all()
+        domain_names = [d.name.strip() for d in domains if d.name]
+
+        if not domain_names:
+            domain_names = ['ufreegames.fun']
+
+        for domain in domain_names:
+            if not domain.startswith('http://') and not domain.startswith('https://'):
+                target_url = f"https://{domain}/upload.php"
+            else:
+                target_url = f"{domain.rstrip('/')}/upload.php"
+
+            payload = {
+                'token': HOSTINGER_SECRET_TOKEN,
+                'slug': instance.slug,
+                'action': 'delete'
+            }
+
+            try:
+                res = requests.post(target_url, data=payload, timeout=5)
+                print(f"Sent delete meta webhook to {target_url}: Status {res.status_code}")
+            except Exception as err:
+                print(f"Failed sending delete meta webhook to {target_url}: {err}")
+    except Exception as e:
+        print(f"Hostinger Meta Delete Error: {e}")
+
 
 
