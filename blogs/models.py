@@ -59,7 +59,13 @@ def send_meta_webhook_for_post(instance):
     try:
         image_url = ""
         if instance.image:
-            image_url = instance.image.url if hasattr(instance.image, 'url') else str(instance.image)
+            url_str = instance.image.url if hasattr(instance.image, 'url') else str(instance.image)
+            if url_str.startswith('http://') or url_str.startswith('https://'):
+                image_url = url_str
+            elif url_str.startswith('/'):
+                image_url = f"https://automation-blogs.onrender.com{url_str}"
+            else:
+                image_url = f"https://automation-blogs.onrender.com/{url_str}"
 
         raw_desc = instance.description or instance.title
         clean_desc = re.sub(r'<[^>]+>', ' ', raw_desc)
